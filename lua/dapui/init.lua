@@ -54,6 +54,9 @@ local controls = require("dapui.controls")
 ---@nodoc
 local elements = {}
 
+---@type dapui.DAPClient?
+local client
+
 local open_float = nil
 
 local function query_elem_name()
@@ -83,7 +86,11 @@ function dapui.setup(user_config)
 
   config.setup(user_config)
 
-  local client = require("dapui.client")(dap.session)
+  -- Remove callbacks retaining the previous elements before replacing them.
+  if client then
+    client.shutdown()
+  end
+  client = require("dapui.client")(dap.session)
 
   ---@type table<string, dapui.Element>
   for _, module in pairs({
