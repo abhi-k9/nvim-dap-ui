@@ -2,7 +2,7 @@ local M = {}
 local api = vim.api
 local config = require("dapui.config")
 
-local Float = { win_id = nil, listeners = { close = {} }, position = {} }
+local Float = {}
 
 local function create_opts(content_width, content_height, position, title)
   local line_no = position.line
@@ -46,6 +46,8 @@ function Float:new(win_id, position)
   self.__index = self
   win.win_id = win_id
   win.position = position
+  win.listeners = { close = {} }
+  win.closed = false
   return win
 end
 
@@ -77,12 +79,23 @@ function Float:jump_to()
 end
 
 function Float:close(force)
+  if self.closed then
+    return true
+  end
   if not force and api.nvim_get_current_win() == self.win_id then
     return false
   end
   local buf = self:get_buf()
-  pcall(api.nvim_win_close, self.win_id, true)
-  for _, listener in pairs(self.listeners.close) do
+  -- WinClosed may call close() again before nvim_win_close returns.
+  self.closed = true
+  local success = pcall(api.nvim_win_close, self.win_id, true)
+  if not success and api.nvim_win_is_valid(self.win_id) then
+    self.closed = false
+    return false
+  end
+  local listeners = self.listeners.close
+  self.listeners.close = {}
+  for _, listener in ipairs(listeners) do
     listener({ buffer = buf })
   end
   return true
