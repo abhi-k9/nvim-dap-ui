@@ -87,6 +87,7 @@ end
 ---@field requests dapui.DAPRequestsClient
 ---@field current_frame? dapui.types.StackFrame
 ---@field stopped_thread_id? integer
+---@field threads? table<integer, dapui.types.Thread>
 
 ---@param args? dapui.tests.mocks.ClientArgs
 ---@return dapui.DAPClient
@@ -97,6 +98,7 @@ function M.client(args)
     seq = 0,
     stopped_thread_id = args.stopped_thread_id,
     current_frame = args.current_frame,
+    threads = args.threads or {},
     set_breakpoints = function() end,
 
     request = function(_, command, request_args, callback)

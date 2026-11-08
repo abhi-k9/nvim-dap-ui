@@ -40,6 +40,8 @@ describe("hover element", function()
     buf = hover.buffer()
   end)
   after_each(function()
+    require("dapui.util").stop_render_tasks()
+    client.shutdown()
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     hover = nil
   end)

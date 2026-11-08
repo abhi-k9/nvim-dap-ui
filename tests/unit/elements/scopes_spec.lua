@@ -70,6 +70,8 @@ describe("scopes element", function()
     client.request.scopes({ frameId = 1 })
   end)
   after_each(function()
+    require("dapui.util").stop_render_tasks()
+    client.shutdown()
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     scopes = nil
   end)

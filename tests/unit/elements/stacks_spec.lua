@@ -8,7 +8,13 @@ local mocks = tests.mocks
 describe("stacks element", function()
   local client, stacks, buf
   a.before_each(function()
+    local threads = {
+      { id = 1, name = "Thread 1" },
+      { id = 2, name = "Thread 2" },
+    }
     client = mocks.client({
+      -- nvim-dap caches threads by ID before rendering their stack frames.
+      threads = { [1] = threads[1], [2] = threads[2] },
       current_frame = {
         id = 1,
       },
@@ -28,16 +34,7 @@ describe("stacks element", function()
           },
         }),
         threads = mocks.threads({
-          threads = {
-            {
-              id = 1,
-              name = "Thread 1",
-            },
-            {
-              id = 2,
-              name = "Thread 2",
-            },
-          },
+          threads = threads,
         }),
         stackTrace = mocks.stack_traces({
           stack_traces = {
@@ -89,9 +86,10 @@ describe("stacks element", function()
     nio.sleep(10)
   end)
   after_each(function()
+    require("dapui.util").stop_render_tasks()
+    client.shutdown()
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     stacks = nil
-    client.shutdown()
   end)
   a.it("renders initial lines", function()
     stacks.render()

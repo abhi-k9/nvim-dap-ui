@@ -54,6 +54,8 @@ describe("breakpoints element", function()
   end)
 
   after_each(function()
+    require("dapui.util").stop_render_tasks()
+    client.shutdown()
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     for path, _ in pairs(init_bps) do
       local path_buf = vim.fn.bufnr(path)

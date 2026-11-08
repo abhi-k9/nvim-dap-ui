@@ -9,6 +9,19 @@ describe("watches element", function()
   ---@type dapui.elements.watches
   local watches
   local client, buf
+
+  local function get_lines()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local prompt = vim.fn.prompt_getprompt(buf)
+    assert.equal("> ", prompt)
+    -- Neovim 0.12 writes the native prompt before entering insert mode.
+    -- Ignore only that prefix; unexpected text on the input line still fails.
+    if lines[#lines] == prompt then
+      lines[#lines] = ""
+    end
+    return lines
+  end
+
   a.before_each(function()
     client = mocks.client({
       current_frame = {
@@ -45,12 +58,14 @@ describe("watches element", function()
     watches.render()
   end)
   after_each(function()
+    require("dapui.util").stop_render_tasks()
+    client.shutdown()
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
     watches = nil
   end)
   describe("with no expressions", function()
     a.it("renders no expressions lines", function()
-      local lines = nio.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local lines = get_lines()
       assert.same({ "No Expressions", "" }, lines)
     end)
     a.it("renders lines after expression update", function()
@@ -64,7 +79,7 @@ describe("watches element", function()
     watches.add("b - 1")
     watches.add("c")
     nio.sleep(10)
-    local lines = nio.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local lines = get_lines()
     assert.same(
       { " a = 'a value'", " b - 1 number = 1", " c table = { d = 1 }", "" },
       lines
@@ -95,7 +110,7 @@ describe("watches element", function()
       watches.toggle_expand(1)
       nio.sleep(10)
 
-      local lines = nio.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local lines = get_lines()
       assert.same({ " c table = { d = 1 }", "   d number = 1", "" }, lines)
     end)
     a.it("renders expanded highlights", function()
