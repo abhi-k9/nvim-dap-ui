@@ -12,6 +12,7 @@ local types = require("dapui.client.types")
 ---@field lib dapui.DAPClientLib
 ---@field breakpoints dapui.BreakpointsProxy
 local DAPUIClient = {}
+local next_client_id = 0
 
 ---@class dapui.SessionProxy
 ---@field current_frame? dapui.types.StackFrame
@@ -109,15 +110,29 @@ end
 ---@return dapui.DAPClient
 local function create_client(session_factory, breakpoints)
   breakpoints = breakpoints or require("dap.breakpoints")
-  local request_seqs = {}
+  local request_seqs = setmetatable({}, { __mode = "k" })
   local async_request = nio.wrap(function(command, args, cb)
     local session = session_factory()
     request_seqs[session] = request_seqs[session] or {}
-    request_seqs[session][session.seq] = true
-    session:request(command, args, function(...)
-      request_seqs[session][session.seq] = nil
+    local pending = request_seqs[session]
+    local seq = session.seq
+    pending[seq] = true
+    local function clear_request()
+      pending[seq] = nil
+      if next(pending) == nil and request_seqs[session] == pending then
+        request_seqs[session] = nil
+      end
+    end
+    local success, err = pcall(session.request, session, command, args, function(...)
+      -- nvim-dap invokes its after-listeners after this callback. Keep the
+      -- marker until both listener phases have finished to avoid feedback.
+      vim.schedule(clear_request)
       cb(...)
     end)
+    if not success then
+      clear_request()
+      error(err, 0)
+    end
   end, 3)
 
   local request = setmetatable({}, {
@@ -136,7 +151,9 @@ local function create_client(session_factory, breakpoints)
     end,
   })
 
-  local listener_prefix = "DAPClient" .. tostring(vim.loop.now())
+  -- Multiple clients can be constructed within the same event-loop tick.
+  next_client_id = next_client_id + 1
+  local listener_prefix = "DAPClient" .. next_client_id .. ":"
   local listener_count = 0
   local listener_ids = {}
   local listen = setmetatable({}, {
@@ -156,18 +173,20 @@ local function create_client(session_factory, breakpoints)
         listener_ids[#listener_ids + 1] = { key, listener_id }
 
         local wrap = function(inner)
-          listeners[key][listener_id] = function(_, ...)
-            if inner(...) then
+          listeners[key][listener_id] = function(session, ...)
+            if inner(session, ...) then
               listeners[key][listener_id] = nil
             end
           end
         end
 
         if is_event then
-          wrap(listener)
+          wrap(function(_, ...)
+            return listener(...)
+          end)
         else
-          wrap(function(err, body, req, req_seq)
-            if (request_seqs[session_factory()] or {})[req_seq] then
+          wrap(function(session, err, body, req, req_seq)
+            if (request_seqs[session] or {})[req_seq] then
               return
             end
             return listener({ error = err, response = body, request = req })
